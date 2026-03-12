@@ -15,7 +15,7 @@ load_dotenv()
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llama3:8b"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-GROQ_MODEL = "llama3-8b-8192"
+GROQ_MODEL = "llama-3.1-8b-instant"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
 
@@ -69,7 +69,7 @@ def _call_ollama(prompt: str) -> str | None:
                 "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "options": {"temperature": 0.3, "num_predict": 800}
+                "options": {"temperature": 0.3, "num_predict": 1200}
             },
             timeout=180
         )
