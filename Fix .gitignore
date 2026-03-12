@@ -1,0 +1,15 @@
+code .gitignore
+```
+
+Add these lines at the top of the file:
+```
+# Python
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+
+# Node
+node_modules/
+.next/
