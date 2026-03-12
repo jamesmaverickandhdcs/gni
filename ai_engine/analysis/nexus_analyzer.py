@@ -6,9 +6,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ============================================================
-# GNI Nexus Analyzer — Day 2
-# Primary:  Llama 3 8B via Ollama (local, free, private)
-# Fallback: Groq API (cloud, free tier)
+# GNI Nexus Analyzer — Day 3 (updated)
+# Primary:  Groq API (GitHub Actions / cloud)
+# Local:    Llama 3 8B via Ollama (local development)
+# Auto-detects environment and uses appropriate LLM
 # ============================================================
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -16,6 +17,7 @@ OLLAMA_MODEL = "llama3:8b"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL = "llama3-8b-8192"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
 
 
 def _build_prompt(articles: list[dict]) -> str:
@@ -79,7 +81,7 @@ def _call_ollama(prompt: str) -> str | None:
 
 
 def _call_groq(prompt: str) -> str | None:
-    """Call Groq API as fallback."""
+    """Call Groq API."""
     if not GROQ_API_KEY:
         print("  ⚠️  No Groq API key found in .env")
         return None
@@ -111,7 +113,6 @@ def _parse_json_response(raw: str) -> dict | None:
     """Safely parse JSON from LLM response."""
     if not raw:
         return None
-    # Strip markdown code fences if present
     raw = raw.strip()
     if raw.startswith("```"):
         lines = raw.split("\n")
@@ -119,7 +120,6 @@ def _parse_json_response(raw: str) -> dict | None:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        # Try to extract JSON object
         start = raw.find("{")
         end = raw.rfind("}") + 1
         if start >= 0 and end > start:
@@ -132,25 +132,33 @@ def _parse_json_response(raw: str) -> dict | None:
 
 def analyze(articles: list[dict]) -> dict | None:
     """
-    Analyze top articles using Llama 3 (local) with Groq fallback.
-    Returns structured report dict or None on failure.
+    Analyze top articles using appropriate LLM.
+    GitHub Actions → Groq API directly (no Ollama timeout waste)
+    Local development → Ollama first, Groq fallback
     """
     if not articles:
         print("  ⚠️  No articles to analyze")
         return None
 
     prompt = _build_prompt(articles)
+    raw = None
+    source_used = None
 
-    # Try Ollama first
-    print("  🧠 Calling Ollama (Llama 3 8B local)...")
-    raw = _call_ollama(prompt)
-    source_used = "ollama"
-
-    # Fallback to Groq
-    if not raw:
-        print("  🔄 Ollama unavailable — falling back to Groq API...")
+    if GITHUB_ACTIONS:
+        # Cloud mode — Groq directly, no Ollama attempt
+        print("  ☁️  GitHub Actions — using Groq API directly...")
         raw = _call_groq(prompt)
         source_used = "groq"
+    else:
+        # Local mode — Ollama first, Groq fallback
+        print("  🧠 Calling Ollama (Llama 3 8B local)...")
+        raw = _call_ollama(prompt)
+        source_used = "ollama"
+
+        if not raw:
+            print("  🔄 Ollama unavailable — falling back to Groq API...")
+            raw = _call_groq(prompt)
+            source_used = "groq"
 
     if not raw:
         print("  ❌ Both Ollama and Groq failed")
@@ -162,7 +170,6 @@ def analyze(articles: list[dict]) -> dict | None:
         print(f"  Raw response: {raw[:200]}")
         return None
 
-    # Enrich with metadata
     report["llm_source"] = source_used
     report["articles_analyzed"] = len(articles)
     report["sources_used"] = list(set(a["source"] for a in articles))
@@ -178,13 +185,15 @@ if __name__ == "__main__":
 
     print("🧠 GNI Nexus Analyzer — Test Run\n")
 
-    # Make sure Ollama is running
-    print("  Checking Ollama...")
-    try:
-        r = requests.get("http://localhost:11434", timeout=3)
-        print("  ✅ Ollama is running\n")
-    except Exception:
-        print("  ⚠️  Ollama not running — will use Groq fallback\n")
+    if GITHUB_ACTIONS:
+        print("  Mode: GitHub Actions (Groq)\n")
+    else:
+        print("  Mode: Local (Ollama + Groq fallback)\n")
+        try:
+            r = requests.get("http://localhost:11434", timeout=3)
+            print("  ✅ Ollama is running\n")
+        except Exception:
+            print("  ⚠️  Ollama not running — will use Groq fallback\n")
 
     raw = collect_articles(max_per_source=20)
     top = run_funnel(raw, top_n=10, max_per_source=3)

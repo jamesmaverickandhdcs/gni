@@ -6,6 +6,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Detect if running in GitHub Actions
+GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
+
 # Add ai_engine to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
