@@ -28,7 +28,7 @@ def _build_prompt(articles: list[dict]) -> str:
 Article {i}:
 Source: {a['source']} ({a['bias']})
 Title: {a['title']}
-Summary: {a['summary'][:300]}
+Summary: {a['summary'][:150]}
 ---"""
 
     return f"""You are GNI — Global Nexus Insights, an expert geopolitical and macroeconomic analyst.
@@ -42,7 +42,7 @@ Respond ONLY with a valid JSON object in this exact format:
 {{
   "title": "Brief title summarizing the main geopolitical theme (max 15 words)",
   "summary": "2-3 sentence English summary of the key event and its significance",
-  "myanmar_summary": "2-3 sentence summary in Myanmar language (Burmese script)",
+ 
   "sentiment": "Bullish or Bearish or Neutral",
   "sentiment_score": 0.0,
   "source_consensus_score": 0.0,
@@ -56,6 +56,7 @@ Rules:
 - sentiment_score: -1.0 (very bearish) to +1.0 (very bullish) for markets
 - source_consensus_score: 0.0 to 1.0 (how much sources agree)
 - tickers_affected: choose from [SPY, AAPL, JPM, XOM, GLD, USO, LMT, TLT, EWT, EWJ, FXI, DXY]
+- Do NOT include myanmar_summary field
 - Respond with JSON only — no extra text, no markdown, no explanation
 """
 

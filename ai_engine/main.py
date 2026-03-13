@@ -53,7 +53,9 @@ def run_pipeline():
         # ── STEP 2: Intelligence Funnel ───────────────────────
         print("\n🔽 Step 2: Running Intelligence Funnel...")
         t0 = time.time()
-        top_articles = run_funnel(articles, top_n=10, max_per_source=3)
+       # Use fewer articles in GitHub Actions to reduce prompt size
+        top_n = 5 if GITHUB_ACTIONS else 10
+        top_articles = run_funnel(articles, top_n=top_n, max_per_source=3)
         step_timings["funnel"] = round(time.time() - t0, 2)
         articles_after_funnel = len(top_articles)
 
