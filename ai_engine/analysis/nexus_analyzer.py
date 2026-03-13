@@ -110,23 +110,65 @@ def _call_groq(prompt: str) -> str | None:
 
 
 def _parse_json_response(raw: str) -> dict | None:
-    """Safely parse JSON from LLM response."""
+    """Safely parse JSON from LLM response — handles truncated responses."""
     if not raw:
         return None
+
     raw = raw.strip()
+
+    # Strip markdown code fences
     if raw.startswith("```"):
         lines = raw.split("\n")
-        raw = "\n".join(lines[1:-1])
+        raw = "\n".join(lines[1:-1]).strip()
+
+    # Try direct parse first
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        if start >= 0 and end > start:
-            try:
-                return json.loads(raw[start:end])
-            except Exception:
-                pass
+        pass
+
+    # Try extracting JSON object
+    start = raw.find("{")
+    end = raw.rfind("}") + 1
+    if start >= 0 and end > start:
+        try:
+            return json.loads(raw[start:end])
+        except Exception:
+            pass
+
+    # Try fixing truncated JSON by closing open strings and braces
+    try:
+        partial = raw[start:] if start >= 0 else raw
+        # Count open braces
+        open_braces = partial.count("{") - partial.count("}")
+        open_quotes = partial.count('"') % 2
+
+        if open_quotes:
+            partial += '"'
+        if open_braces > 0:
+            partial += "}" * open_braces
+
+        result = json.loads(partial)
+        # Fill missing required fields with defaults
+        defaults = {
+            "title": "GNI Report",
+            "summary": "",
+            "myanmar_summary": "",
+            "sentiment": "Neutral",
+            "sentiment_score": 0.0,
+            "source_consensus_score": 0.5,
+            "location_name": "Global",
+            "tickers_affected": ["SPY"],
+            "market_impact": "",
+            "risk_level": "Medium"
+        }
+        for k, v in defaults.items():
+            if k not in result:
+                result[k] = v
+        return result
+    except Exception:
+        pass
+
     return None
 
 
