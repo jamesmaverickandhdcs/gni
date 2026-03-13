@@ -6,10 +6,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ============================================================
-# GNI Nexus Analyzer — Day 3 (updated)
+# GNI Nexus Analyzer — Day 4 (updated)
 # Primary:  Groq API (GitHub Actions / cloud)
 # Local:    Llama 3 8B via Ollama (local development)
 # Auto-detects environment and uses appropriate LLM
+# Myanmar summary generated as separate post-processing step
 # ============================================================
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
@@ -42,7 +43,6 @@ Respond ONLY with a valid JSON object in this exact format:
 {{
   "title": "Brief title summarizing the main geopolitical theme (max 15 words)",
   "summary": "2-3 sentence English summary of the key event and its significance",
- 
   "sentiment": "Bullish or Bearish or Neutral",
   "sentiment_score": 0.0,
   "source_consensus_score": 0.0,
@@ -97,7 +97,7 @@ def _call_groq(prompt: str) -> str | None:
                 "model": GROQ_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
-                "max_tokens": 1500
+                "max_tokens": 2000
             },
             timeout=30
         )
@@ -140,7 +140,6 @@ def _parse_json_response(raw: str) -> dict | None:
     # Try fixing truncated JSON by closing open strings and braces
     try:
         partial = raw[start:] if start >= 0 else raw
-        # Count open braces
         open_braces = partial.count("{") - partial.count("}")
         open_quotes = partial.count('"') % 2
 
@@ -150,11 +149,9 @@ def _parse_json_response(raw: str) -> dict | None:
             partial += "}" * open_braces
 
         result = json.loads(partial)
-        # Fill missing required fields with defaults
         defaults = {
             "title": "GNI Report",
             "summary": "",
-            "myanmar_summary": "",
             "sentiment": "Neutral",
             "sentiment_score": 0.0,
             "source_consensus_score": 0.5,
@@ -171,6 +168,50 @@ def _parse_json_response(raw: str) -> dict | None:
         pass
 
     return None
+
+
+def _generate_myanmar_summary(report: dict) -> str:
+    """Generate a Burmese language summary as a separate post-processing step."""
+    if not GROQ_API_KEY:
+        return ""
+
+    title = report.get("title", "")
+    summary = report.get("summary", "")
+    sentiment = report.get("sentiment", "Neutral")
+    risk = report.get("risk_level", "Medium")
+
+    prompt = f"""Translate this EXACT text into Myanmar (Burmese) language. 
+Translate word-for-word accurately. Do not summarize or change the meaning.
+Respond with ONLY the Burmese translation, nothing else.
+
+Text to translate:
+{summary}"""
+
+    try:
+        response = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {GROQ_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": GROQ_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 300
+            },
+            timeout=15
+        )
+        if response.status_code == 200:
+            result = response.json()["choices"][0]["message"]["content"].strip()
+            print(f"  ✅ Myanmar summary generated ({len(result)} chars)")
+            return result
+        else:
+            print(f"  ⚠️  Myanmar summary failed: {response.status_code}")
+            return ""
+    except Exception as e:
+        print(f"  ⚠️  Myanmar summary error: {e}")
+        return ""
 
 
 def analyze(articles: list[dict]) -> dict | None:
@@ -217,6 +258,10 @@ def analyze(articles: list[dict]) -> dict | None:
     report["articles_analyzed"] = len(articles)
     report["sources_used"] = list(set(a["source"] for a in articles))
 
+    # ── Myanmar Summary (separate Groq call) ──────────────────
+    print("  🇲🇲 Generating Myanmar summary...")
+    report["myanmar_summary"] = _generate_myanmar_summary(report)
+
     return report
 
 
@@ -246,13 +291,14 @@ if __name__ == "__main__":
 
     if report:
         print("\n📊 GNI REPORT:")
-        print(f"  Title:      {report.get('title')}")
-        print(f"  Sentiment:  {report.get('sentiment')} ({report.get('sentiment_score')})")
-        print(f"  Risk Level: {report.get('risk_level')}")
-        print(f"  Location:   {report.get('location_name')}")
-        print(f"  Tickers:    {report.get('tickers_affected')}")
-        print(f"  LLM Used:   {report.get('llm_source')}")
+        print(f"  Title:           {report.get('title')}")
+        print(f"  Sentiment:       {report.get('sentiment')} ({report.get('sentiment_score')})")
+        print(f"  Risk Level:      {report.get('risk_level')}")
+        print(f"  Location:        {report.get('location_name')}")
+        print(f"  Tickers:         {report.get('tickers_affected')}")
+        print(f"  LLM Used:        {report.get('llm_source')}")
+        print(f"  Market Impact:   {report.get('market_impact')}")
         print(f"\n  Summary:\n  {report.get('summary')}")
-        print(f"\n  Market Impact:\n  {report.get('market_impact')}")
+        print(f"\n  Myanmar Summary:\n  {report.get('myanmar_summary')}")
     else:
         print("  ❌ Analysis failed")
