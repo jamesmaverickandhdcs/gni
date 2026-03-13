@@ -69,8 +69,10 @@ def save_report(report: dict, articles: list[dict]) -> str | None:
             "location_name": location_name,
             "sources": json.dumps(report.get("sources_used", [])),
             "tickers_affected": report.get("tickers_affected", []),
+            "market_impact": report.get("market_impact", ""),
+            "risk_level": report.get("risk_level", "Medium"),
+            "llm_source": report.get("llm_source", ""),
         }
-
         result = client.table("reports").insert(record).execute()
 
         if result.data:
