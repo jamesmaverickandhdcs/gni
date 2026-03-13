@@ -7,19 +7,14 @@ const supabase = createClient(
 )
 
 export async function GET() {
-  try {
-    const { data, error } = await supabase
-      .from('watchlist')
-      .select('*')
-      .order('symbol', { ascending: true })
+  const { data, error } = await supabase
+    .from('watchlist')
+    .select('*')
+    .order('symbol', { ascending: true })
 
-    if (error) throw error
-
-    return NextResponse.json({ watchlist: data })
-  } catch {
-    return NextResponse.json(
-      { error: 'Failed to fetch watchlist' },
-      { status: 500 }
-    )
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
+
+  return NextResponse.json({ watchlist: data })
 }
