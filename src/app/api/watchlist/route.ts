@@ -10,7 +10,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('watchlist')
     .select('*')
-    .order('symbol', { ascending: true })
+    .order('ticker', { ascending: true })
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })

@@ -18,10 +18,10 @@ interface Report {
 
 interface WatchlistItem {
   id: string
-  symbol: string
+  ticker: string
   name: string
-  sector: string
-  region: string
+  category: string
+  active: boolean
 }
 
 const riskColor = (risk: string) => {
@@ -226,11 +226,13 @@ export default function Home() {
                   {watchlist.map(item => (
                     <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-lg p-3 hover:border-gray-600 transition-colors">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-bold text-blue-400 text-sm">{item.symbol}</span>
-                        <span className="text-xs text-gray-500">{item.region}</span>
+                        <span className="font-mono font-bold text-blue-400 text-sm">{item.ticker}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${item.active ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-500'}`}>
+                          {item.active ? 'Active' : 'Off'}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-300 truncate">{item.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">{item.sector}</div>
+                      <div className="text-xs text-gray-500 mt-1">{item.category}</div>
                     </div>
                   ))}
                 </div>
