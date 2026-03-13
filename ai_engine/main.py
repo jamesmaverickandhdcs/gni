@@ -80,6 +80,14 @@ def run_pipeline():
         if report_id:
             reports_saved = 1
 
+        # ── STEP 5: Telegram Notification ──────────────────────────
+        print("\n📱 Step 5: Sending Telegram Notification...")
+        try:
+            from notifications.telegram_notifier import notify_report
+            notify_report(report)
+        except Exception as te:
+            print(f"  ⚠️  Telegram notification failed (non-critical): {te}")
+
     except Exception as e:
         status = "failed"
         error_message = str(e)
@@ -88,7 +96,7 @@ def run_pipeline():
     finally:
         # ── STEP 5: Save Runtime Log ──────────────────────────
         total_seconds = round((datetime.now(timezone.utc) - run_start).total_seconds(), 2)
-        print(f"\n📊 Step 5: Saving Runtime Log...")
+        print(f"\n📊 Step 6: Saving Runtime Log...")
         save_runtime_log(
             run_at=run_at,
             total_seconds=total_seconds,
