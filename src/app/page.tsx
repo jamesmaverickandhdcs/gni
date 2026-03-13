@@ -16,6 +16,14 @@ interface Report {
   created_at: string
 }
 
+interface WatchlistItem {
+  id: string
+  symbol: string
+  name: string
+  sector: string
+  region: string
+}
+
 const riskColor = (risk: string) => {
   switch (risk?.toLowerCase()) {
     case 'critical': return 'bg-red-600 text-white'
@@ -44,6 +52,7 @@ const sentimentIcon = (sentiment: string) => {
 
 export default function Home() {
   const [reports, setReports] = useState<Report[]>([])
+  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -56,6 +65,11 @@ export default function Home() {
       })
       .catch(() => setError('Failed to load reports'))
       .finally(() => setLoading(false))
+
+    fetch('/api/watchlist')
+      .then(r => r.json())
+      .then(data => setWatchlist(data.watchlist || []))
+      .catch(() => {})
   }, [])
 
   const latest = reports[0]
@@ -157,14 +171,16 @@ export default function Home() {
                 {/* Market Impact */}
                 <div className="bg-gray-800 rounded-lg p-4">
                   <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Market Impact Analysis</div>
-                  <p className="text-gray-300 text-sm leading-relaxed">{latest.market_impact}</p>
+                  <p className="text-gray-300 text-sm leading-relaxed">
+                    {latest.market_impact || 'Analysis will appear in next pipeline run.'}
+                  </p>
                 </div>
               </div>
             </section>
 
             {/* Previous Reports */}
             {reports.length > 1 && (
-              <section>
+              <section className="mb-8">
                 <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">Previous Reports</div>
                 <div className="space-y-3">
                   {reports.slice(1).map(report => (
@@ -194,6 +210,27 @@ export default function Home() {
                           <span key={t} className="text-xs font-mono text-blue-400">{t}</span>
                         ))}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Watchlist */}
+            {watchlist.length > 0 && (
+              <section className="mt-8">
+                <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                  Market Watchlist — {watchlist.length} Instruments
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                  {watchlist.map(item => (
+                    <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-lg p-3 hover:border-gray-600 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-mono font-bold text-blue-400 text-sm">{item.symbol}</span>
+                        <span className="text-xs text-gray-500">{item.region}</span>
+                      </div>
+                      <div className="text-xs text-gray-300 truncate">{item.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{item.sector}</div>
                     </div>
                   ))}
                 </div>
