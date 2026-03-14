@@ -7,8 +7,8 @@ from supabase import create_client, Client
 load_dotenv(override=False)
 
 # ============================================================
-# GNI Supabase Saver — Day 2
-# Saves AI-generated reports to Supabase PostgreSQL
+# GNI Supabase Saver — Day 6
+# Now saves pipeline runs + full article trace
 # ============================================================
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
@@ -18,7 +18,6 @@ _client: Client | None = None
 
 
 def get_client() -> Client | None:
-    """Get or create Supabase client."""
     global _client
     if _client:
         return _client
@@ -34,16 +33,12 @@ def get_client() -> Client | None:
 
 
 def save_report(report: dict, articles: list[dict]) -> str | None:
-    """
-    Save a GNI report to Supabase reports table.
-    Returns the saved report ID or None on failure.
-    """
+    """Save a GNI report to Supabase reports table."""
     client = get_client()
     if not client:
         return None
 
     try:
-        # Geocode primary location
         lat, lng = None, None
         location_name = report.get("location_name", "")
         if location_name:
@@ -55,7 +50,6 @@ def save_report(report: dict, articles: list[dict]) -> str | None:
                 lat = geo["lat"]
                 lng = geo["lng"]
 
-        # Build record
         record = {
             "title": report.get("title", "Untitled Report"),
             "summary": report.get("summary", ""),
@@ -73,6 +67,7 @@ def save_report(report: dict, articles: list[dict]) -> str | None:
             "risk_level": report.get("risk_level", "Medium"),
             "llm_source": report.get("llm_source", ""),
         }
+
         result = client.table("reports").insert(record).execute()
 
         if result.data:
@@ -86,6 +81,87 @@ def save_report(report: dict, articles: list[dict]) -> str | None:
     except Exception as e:
         print(f"  ❌ Failed to save report: {e}")
         return None
+
+
+def save_pipeline_run(
+    run_at: str,
+    report_id: str | None,
+    total_collected: int,
+    total_after_relevance: int,
+    total_after_dedup: int,
+    total_after_funnel: int,
+    llm_source: str,
+    status: str,
+    duration_seconds: float,
+) -> str | None:
+    """Save a pipeline run record. Returns run_id or None."""
+    client = get_client()
+    if not client:
+        return None
+
+    try:
+        record = {
+            "run_at": run_at,
+            "report_id": report_id,
+            "total_collected": total_collected,
+            "total_after_relevance": total_after_relevance,
+            "total_after_dedup": total_after_dedup,
+            "total_after_funnel": total_after_funnel,
+            "llm_source": llm_source,
+            "status": status,
+            "duration_seconds": duration_seconds,
+        }
+        result = client.table("pipeline_runs").insert(record).execute()
+        if result.data:
+            run_id = result.data[0]["id"]
+            print(f"  ✅ Pipeline run saved: {run_id[:8]}...")
+            return run_id
+        return None
+    except Exception as e:
+        print(f"  ❌ Failed to save pipeline run: {e}")
+        return None
+
+
+def save_pipeline_articles(run_id: str, trace: list[dict]) -> bool:
+    """Save full article trace to pipeline_articles table."""
+    client = get_client()
+    if not client:
+        return False
+
+    try:
+        records = []
+        for art in trace:
+            records.append({
+                "run_id": run_id,
+                "source": art.get("source", ""),
+                "bias": art.get("bias", ""),
+                "title": art.get("title", ""),
+                "url": art.get("url", ""),
+                "summary": (art.get("summary", "") or "")[:500],
+                "published_at": str(art.get("published", "")),
+                "stage1_passed": art.get("stage1_passed", False),
+                "stage1_reason": art.get("stage1_reason", ""),
+                "stage1b_passed": art.get("stage1b_passed", True),
+                "stage1b_reason": art.get("stage1b_reason", ""),
+                "stage2_passed": art.get("stage2_passed", True),
+                "stage2_reason": art.get("stage2_reason", ""),
+                "stage3_score": float(art.get("stage3_score", 0.0)),
+                "stage4_selected": art.get("stage4_selected", False),
+                "stage4_rank": art.get("stage4_rank", None),
+            })
+
+        # Insert in batches of 50
+        batch_size = 50
+        for i in range(0, len(records), batch_size):
+            batch = records[i:i + batch_size]
+            client.table("pipeline_articles").insert(batch).execute()
+
+        print(f"  ✅ Article trace saved: {len(records)} articles")
+        return True
+
+    except Exception as e:
+        print(f"  ❌ Failed to save article trace: {e}")
+        return False
 
 
 def save_runtime_log(
@@ -121,38 +197,3 @@ def save_runtime_log(
     except Exception as e:
         print(f"  ❌ Failed to save runtime log: {e}")
         return False
-
-
-if __name__ == "__main__":
-    import sys, os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from collectors.rss_collector import collect_articles
-    from funnel.intelligence_funnel import run_funnel
-    from analysis.nexus_analyzer import analyze
-
-    print("💾 GNI Supabase Saver — Test Run\n")
-
-    # Check connection
-    client = get_client()
-    if not client:
-        print("❌ Cannot connect to Supabase — check .env file")
-        exit(1)
-    print("  ✅ Supabase connected\n")
-
-    # Run full pipeline
-    raw = collect_articles(max_per_source=20)
-    top = run_funnel(raw, top_n=10, max_per_source=3)
-
-    print("\n🔬 Analyzing...")
-    report = analyze(top)
-
-    if report:
-        print("\n💾 Saving to Supabase...")
-        report_id = save_report(report, top)
-        if report_id:
-            print(f"\n  ✅ Full pipeline complete!")
-            print(f"  Report ID: {report_id}")
-        else:
-            print("\n  ❌ Save failed")
-    else:
-        print("  ❌ Analysis failed")

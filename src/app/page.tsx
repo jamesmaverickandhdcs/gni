@@ -90,9 +90,14 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-white">🌐 Global Nexus Insights</h1>
             <p className="text-sm text-gray-400">Macro-Economic & Geopolitical Intelligence</p>
           </div>
-          <div className="text-right text-sm text-gray-400">
-            <div>Pipeline: <span className="text-green-400">● Active</span></div>
-            <div>Reports: <span className="text-white font-bold">{reports.length}</span></div>
+          <div className="text-right text-sm text-gray-400 flex items-center gap-4">
+            <a href="/transparency" className="text-blue-400 hover:text-blue-300 text-sm">
+              🔍 Transparency
+            </a>
+            <div>
+              <div>Pipeline: <span className="text-green-400">● Active</span></div>
+              <div>Reports: <span className="text-white font-bold">{reports.length}</span></div>
+            </div>
           </div>
         </div>
       </header>

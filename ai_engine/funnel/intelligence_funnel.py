@@ -1,229 +1,260 @@
 import re
-from typing import Optional
+import hashlib
+from datetime import datetime
 
 # ============================================================
-# GNI 4-Stage Intelligence Funnel — Day 2 (v2)
-# FIX 1: Removed Non-Western scoring bias
-# FIX 2: Prompt injection detection integrated
-# FIX 3: Source diversity enforcement in Stage 4
+# GNI Intelligence Funnel v3 — Day 6
+# Now returns full article trace for Explainable AI
+# Each article carries pass/fail + reason at every stage
 # ============================================================
 
-# --- Stage 1: Relevance Keywords ---
+# Stage 1: Relevance keywords
 GEOPOLITICAL_KEYWORDS = [
-    # Conflict & Military
-    "war", "conflict", "military", "attack", "airstrike", "missile",
-    "troops", "invasion", "ceasefire", "sanctions", "nuclear",
-    "weapon", "bomb", "explosion", "shootout", "assassination",
-    # Economic & Markets
-    "economy", "recession", "inflation", "interest rate", "federal reserve",
-    "central bank", "gdp", "trade war", "tariff", "embargo", "oil",
-    "energy", "commodity", "stock market", "crash", "rally", "crisis",
-    # Geopolitics
-    "election", "coup", "protest", "government", "president", "prime minister",
-    "summit", "treaty", "alliance", "nato", "united nations", "g7", "g20",
-    "china", "russia", "ukraine", "israel", "iran", "north korea",
-    "taiwan", "india", "pakistan", "middle east", "south china sea",
-    # Natural Disasters & Health
-    "earthquake", "tsunami", "hurricane", "flood", "drought",
-    "pandemic", "outbreak", "disease", "famine",
+    'war', 'conflict', 'military', 'attack', 'sanction', 'missile',
+    'nuclear', 'troops', 'invasion', 'ceasefire', 'nato', 'alliance',
+    'crisis', 'tension', 'threat', 'weapon', 'bomb', 'strike',
+    'economy', 'gdp', 'inflation', 'recession', 'trade', 'tariff',
+    'oil', 'energy', 'gas', 'commodity', 'supply chain', 'export',
+    'import', 'currency', 'dollar', 'federal reserve', 'interest rate',
+    'geopolit', 'diplomacy', 'ambassador', 'sanction', 'embargo',
+    'president', 'prime minister', 'government', 'election', 'coup',
+    'protest', 'revolution', 'riot', 'terrorism', 'extremis',
+    'china', 'russia', 'ukraine', 'iran', 'israel', 'taiwan',
+    'north korea', 'middle east', 'pacific', 'nato', 'eu', 'opec',
+    'refugee', 'humanitarian', 'famine', 'drought', 'climate',
+    'pandemic', 'vaccine', 'who', 'united nations', 'security council',
 ]
 
 IRRELEVANT_KEYWORDS = [
-    "entertainment", "celebrity", "sports", "movie", "music",
-    "fashion", "lifestyle", "recipe", "travel tips", "horoscope",
-    "reality tv", "award show",
+    'celebrity', 'entertainment', 'movie', 'music', 'sport', 'football',
+    'basketball', 'tennis', 'golf', 'oscars', 'grammy', 'fashion',
+    'recipe', 'cooking', 'lifestyle', 'travel', 'tourism', 'wedding',
+    'divorce', 'dating', 'viral', 'meme', 'tiktok', 'instagram',
 ]
 
-# --- FIX 2: Prompt Injection Patterns ---
+# Stage 1b: Injection patterns
 INJECTION_PATTERNS = [
-    r"ignore\s+(previous|prior|above|all)\s+instructions?",
-    r"disregard\s+(previous|prior|above|all)\s+instructions?",
-    r"forget\s+(previous|prior|above|all)\s+instructions?",
-    r"override\s+(previous|prior|above|all)\s+instructions?",
-    r"new\s+instructions?\s*:",
-    r"system\s*:\s*you\s+are",
-    r"you\s+are\s+now\s+a",
-    r"act\s+as\s+(a|an)\s+\w+",
-    r"pretend\s+(you\s+are|to\s+be)",
-    r"rate\s+this\s+article\s+[\d/]+",
-    r"score\s*[:=]\s*\d+",
-    r"significance\s*[:=]\s*\d+",
-    r"mark\s+(all|this)\s+(others?|article)",
-    r"(always|never)\s+(rate|score|rank)\s+\w+\s+as",
-    r"<\s*system\s*>",
-    r"\[INST\]",
-    r"<<SYS>>",
+    r'ignore\s+(previous|all|above)\s+instructions?',
+    r'you\s+are\s+now\s+(a\s+)?(?:different|new|another)',
+    r'(system|admin|root)\s*:\s*(override|bypass|ignore)',
+    r'rate\s+this\s+article\s+[0-9]+\s*/\s*[0-9]+',
+    r'score\s*[=:]\s*[0-9]+',
+    r'set\s+(score|rating|rank)\s+to\s+[0-9]+',
+    r'(act|behave)\s+as\s+(if\s+)?(you\s+are\s+)?a?\s*(?:bias|propaganda)',
+    r'forget\s+(your|all|previous)',
+    r'new\s+instruction',
+    r'<\s*/?(?:system|instruction|prompt)\s*>',
+    r'""".*?"""',
+    r"'''.*?'''",
+    r'print\s*\(',
+    r'exec\s*\(',
+    r'eval\s*\(',
+    r'__import__',
 ]
-_COMPILED_PATTERNS = [re.compile(p, re.IGNORECASE) for p in INJECTION_PATTERNS]
 
 
-def _detect_injection(article: dict) -> bool:
-    """Returns True if article is clean, False if injection detected."""
-    text = f"{article.get('title', '')} {article.get('summary', '')}"
-    for pattern in _COMPILED_PATTERNS:
-        if pattern.search(text):
-            article["injection_threat"] = True
-            return False
-    article["injection_threat"] = False
-    return True
+def _check_relevance(article: dict) -> tuple[bool, str]:
+    """Stage 1: Check if article is geopolitically relevant."""
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+
+    # Check irrelevant first
+    for kw in IRRELEVANT_KEYWORDS:
+        if kw in text:
+            return False, f"Irrelevant topic: '{kw}'"
+
+    # Check relevant
+    matched = [kw for kw in GEOPOLITICAL_KEYWORDS if kw in text]
+    if matched:
+        return True, f"Matched keywords: {', '.join(matched[:3])}"
+
+    return False, "No geopolitical keywords found"
 
 
-def stage1_relevance(articles: list[dict]) -> list[dict]:
-    """Filter articles by geopolitical/economic relevance."""
-    passed = []
-    for article in articles:
-        text = f"{article['title']} {article['summary']}".lower()
-        if any(kw in text for kw in IRRELEVANT_KEYWORDS):
-            continue
-        if any(kw in text for kw in GEOPOLITICAL_KEYWORDS):
-            article["stage1_passed"] = True
-            passed.append(article)
-    print(f"  Stage 1 (Relevance):       {len(articles)} → {len(passed)} articles")
-    return passed
+def _check_injection(article: dict) -> tuple[bool, str]:
+    """Stage 1b: Check for prompt injection attacks."""
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+    for pattern in INJECTION_PATTERNS:
+        if re.search(pattern, text, re.IGNORECASE):
+            return False, f"Injection pattern detected: {pattern[:40]}"
+    return True, "Clean — no injection patterns"
 
 
-def stage1b_injection_filter(articles: list[dict]) -> list[dict]:
-    """FIX 2: Remove articles with prompt injection attempts."""
-    clean = []
-    flagged_count = 0
-    for article in articles:
-        if _detect_injection(article):
-            clean.append(article)
+def _get_dedup_key(article: dict) -> str:
+    """Generate deduplication key from title."""
+    title = article.get('title', '').lower().strip()
+    title = re.sub(r'[^a-z0-9\s]', '', title)
+    words = title.split()[:6]
+    return hashlib.md5(' '.join(words).encode()).hexdigest()
+
+
+def _score_article(article: dict) -> tuple[float, str]:
+    """Stage 3: Score article by significance."""
+    score = 0.0
+    reasons = []
+
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+
+    # High-impact keywords (+3 each, max 15)
+    high_impact = [
+        'war', 'nuclear', 'invasion', 'attack', 'crisis',
+        'sanction', 'ceasefire', 'coup', 'collapse', 'embargo'
+    ]
+    hi_matches = [kw for kw in high_impact if kw in text]
+    hi_score = min(len(hi_matches) * 3, 15)
+    score += hi_score
+    if hi_matches:
+        reasons.append(f"High-impact terms ({hi_score}pts): {', '.join(hi_matches[:3])}")
+
+    # Medium-impact keywords (+1 each, max 10)
+    med_impact = [
+        'military', 'troops', 'missile', 'economy', 'inflation',
+        'oil', 'trade', 'tariff', 'election', 'protest', 'tension'
+    ]
+    med_matches = [kw for kw in med_impact if kw in text]
+    med_score = min(len(med_matches), 10)
+    score += med_score
+    if med_matches:
+        reasons.append(f"Medium-impact terms ({med_score}pts): {', '.join(med_matches[:3])}")
+
+    # Major country/region bonus (+5)
+    major_regions = [
+        'china', 'russia', 'ukraine', 'iran', 'israel',
+        'taiwan', 'north korea', 'middle east', 'usa', 'europe'
+    ]
+    region_matches = [r for r in major_regions if r in text]
+    if region_matches:
+        score += 5
+        reasons.append(f"Major region (+5pts): {region_matches[0]}")
+
+    # Source credibility bonus (+2)
+    credible = ['bbc', 'al jazeera', 'dw news']
+    if article.get('source', '').lower() in credible:
+        score += 2
+        reasons.append(f"Credible source (+2pts): {article.get('source')}")
+
+    reason_str = " | ".join(reasons) if reasons else "Base score only"
+    return round(score, 2), reason_str
+
+
+def run_funnel(
+    articles: list[dict],
+    top_n: int = 5,
+    max_per_source: int = 3
+) -> tuple[list[dict], list[dict]]:
+    """
+    Run the 4-stage Intelligence Funnel.
+    
+    Returns:
+        (top_articles, article_trace)
+        
+        top_articles: final selected articles for AI analysis
+        article_trace: ALL articles with full stage-by-stage trace
+    """
+    print("🔽 Intelligence Funnel Running...")
+    trace = []
+    seen_keys = set()
+
+    # ── Stage 1: Relevance ──────────────────────────────────
+    stage1_pass = []
+    for art in articles:
+        passed, reason = _check_relevance(art)
+        art['stage1_passed'] = passed
+        art['stage1_reason'] = reason
+        # Default remaining stages
+        art['stage1b_passed'] = True
+        art['stage1b_reason'] = 'Not evaluated (failed Stage 1)'
+        art['stage2_passed'] = True
+        art['stage2_reason'] = 'Not evaluated (failed Stage 1)'
+        art['stage3_score'] = 0.0
+        art['stage3_reason'] = 'Not evaluated (failed Stage 1)'
+        art['stage4_selected'] = False
+        art['stage4_rank'] = None
+
+        if passed:
+            stage1_pass.append(art)
         else:
-            flagged_count += 1
-            print(f"  🚨 INJECTION FLAGGED: [{article['source']}] {article['title'][:60]}")
-    print(f"  Stage 1b (Inj. Filter):    {len(articles)} → {len(clean)} articles ({flagged_count} flagged)")
-    return clean
+            trace.append(art)
 
+    print(f"  Stage 1 (Relevance):       {len(articles)} → {len(stage1_pass)} articles")
 
-def stage2_deduplication(articles: list[dict], threshold: float = 0.6) -> list[dict]:
-    """Remove duplicate articles based on title similarity."""
-    def normalize(text: str) -> set:
-        words = re.sub(r'[^\w\s]', '', text.lower()).split()
-        return set(w for w in words if len(w) > 3)
+    # ── Stage 1b: Injection Detection ───────────────────────
+    stage1b_pass = []
+    for art in stage1_pass:
+        passed, reason = _check_injection(art)
+        art['stage1b_passed'] = passed
+        art['stage1b_reason'] = reason
+        art['stage2_passed'] = True
+        art['stage2_reason'] = 'Not evaluated (failed Stage 1b)'
+        art['stage3_score'] = 0.0
+        art['stage3_reason'] = 'Not evaluated (failed Stage 1b)'
 
-    unique = []
-    seen_titles = []
+        if passed:
+            stage1b_pass.append(art)
+        else:
+            trace.append(art)
 
-    for article in articles:
-        title_words = normalize(article["title"])
-        is_duplicate = False
-        for seen in seen_titles:
-            if not title_words or not seen:
-                continue
-            overlap = len(title_words & seen) / len(title_words | seen)
-            if overlap >= threshold:
-                is_duplicate = True
-                break
-        if not is_duplicate:
-            unique.append(article)
-            seen_titles.append(title_words)
+    flagged = len(stage1_pass) - len(stage1b_pass)
+    print(f"  Stage 1b (Inj. Filter):    {len(stage1_pass)} → {len(stage1b_pass)} articles ({flagged} flagged)")
 
-    print(f"  Stage 2 (Deduplication):   {len(articles)} → {len(unique)} articles")
-    return unique
+    # ── Stage 2: Deduplication ──────────────────────────────
+    stage2_pass = []
+    for art in stage1b_pass:
+        key = _get_dedup_key(art)
+        if key in seen_keys:
+            art['stage2_passed'] = False
+            art['stage2_reason'] = f"Duplicate of earlier article (key: {key[:8]}...)"
+            art['stage3_score'] = 0.0
+            art['stage3_reason'] = 'Not evaluated (duplicate)'
+            trace.append(art)
+        else:
+            seen_keys.add(key)
+            art['stage2_passed'] = True
+            art['stage2_reason'] = "Unique article — no duplicate found"
+            stage2_pass.append(art)
 
+    dupes = len(stage1b_pass) - len(stage2_pass)
+    print(f"  Stage 2 (Deduplication):   {len(stage1b_pass)} → {len(stage2_pass)} articles ({dupes} dupes)")
 
-def stage3_significance(articles: list[dict]) -> list[dict]:
-    """
-    FIX 1: Score articles by significance (0-100).
-    Removed Non-Western bias bonus — all sources scored equally.
-    Added recency bonus and multi-source consensus bonus.
-    """
-    HIGH_IMPACT = [
-        "nuclear", "war", "invasion", "coup", "crash", "collapse",
-        "recession", "pandemic", "assassination", "ceasefire", "sanctions",
-        "federal reserve", "interest rate", "explosion", "attack",
-    ]
-    MEDIUM_IMPACT = [
-        "election", "protest", "military", "oil", "trade", "tariff",
-        "summit", "treaty", "conflict", "missile", "inflation", "gdp",
-    ]
+    # ── Stage 3: Significance Scoring ───────────────────────
+    for art in stage2_pass:
+        score, reason = _score_article(art)
+        art['stage3_score'] = score
+        art['stage3_reason'] = reason
 
-    # Count topic coverage across sources for consensus bonus
-    topic_source_map: dict[str, set] = {}
-    for article in articles:
-        key = article["title"][:40].lower()
-        if key not in topic_source_map:
-            topic_source_map[key] = set()
-        topic_source_map[key].add(article["source"])
+    print(f"  Stage 3 (Significance):    Scored {len(stage2_pass)} articles")
 
-    for article in articles:
-        text = f"{article['title']} {article['summary']}".lower()
-        score = 0
+    # ── Stage 4: Diversity Ranking ──────────────────────────
+    sorted_arts = sorted(stage2_pass, key=lambda x: x['stage3_score'], reverse=True)
 
-        # Impact scoring — same for ALL sources (FIX 1)
-        if any(kw in text for kw in HIGH_IMPACT):
-            score += 35
-        elif any(kw in text for kw in MEDIUM_IMPACT):
-            score += 20
-
-        # Multi-source consensus bonus (objective signal)
-        key = article["title"][:40].lower()
-        source_count = len(topic_source_map.get(key, set()))
-        if source_count >= 3:
-            score += 25  # Strong consensus
-        elif source_count == 2:
-            score += 15  # Moderate consensus
-
-        # Economic market impact bonus
-        if any(kw in text for kw in ["federal reserve", "interest rate", "recession", "gdp", "inflation"]):
-            score += 10
-
-        article["significance_score"] = min(score, 100)
-        article["source_consensus"] = source_count
-
-    print(f"  Stage 3 (Significance):    Scored {len(articles)} articles")
-    return articles
-
-
-def stage4_ranking(articles: list[dict], top_n: int = 10, max_per_source: int = 3) -> list[dict]:
-    """
-    FIX 3: Rank by significance AND enforce source diversity.
-    Max 3 articles per source in final top N.
-    """
-    ranked = sorted(articles, key=lambda x: x.get("significance_score", 0), reverse=True)
-
-    # Source diversity enforcement
-    source_counts: dict[str, int] = {}
-    diverse_top = []
-
-    for article in ranked:
-        source = article["source"]
+    source_counts = {}
+    selected = []
+    for art in sorted_arts:
+        source = art.get('source', 'Unknown')
         count = source_counts.get(source, 0)
-        if count < max_per_source:
-            diverse_top.append(article)
+        if count < max_per_source and len(selected) < top_n:
             source_counts[source] = count + 1
-        if len(diverse_top) >= top_n:
-            break
+            art['stage4_selected'] = True
+            art['stage4_rank'] = len(selected) + 1
+            art['stage4_reason'] = f"Rank {len(selected)+1} — score {art['stage3_score']} — {source} ({count+1}/{max_per_source})"
+            selected.append(art)
+        else:
+            if count >= max_per_source:
+                art['stage4_selected'] = False
+                art['stage4_reason'] = f"Source limit reached: {source} already has {count} articles"
+            else:
+                art['stage4_selected'] = False
+                art['stage4_reason'] = f"Top {top_n} already selected"
 
-    print(f"  Stage 4 (Ranking+Diversity): Top {len(diverse_top)} selected")
-    print(f"  Source distribution: { {k:v for k,v in source_counts.items()} }")
-    return diverse_top
+    # Add all stage2_pass to trace
+    trace.extend(stage2_pass)
 
+    dist = {}
+    for a in selected:
+        dist[a['source']] = dist.get(a['source'], 0) + 1
 
-def run_funnel(articles: list[dict], top_n: int = 10, max_per_source: int = 3) -> list[dict]:
-    """Run all stages of the intelligence funnel."""
-    print("\n🔽 Intelligence Funnel Running...")
-    articles = stage1_relevance(articles)
-    articles = stage1b_injection_filter(articles)
-    articles = stage2_deduplication(articles)
-    articles = stage3_significance(articles)
-    articles = stage4_ranking(articles, top_n=top_n, max_per_source=max_per_source)
-    print(f"\n  ✅ Funnel complete — {len(articles)} articles ready for AI analysis\n")
-    return articles
+    print(f"  Stage 4 (Ranking+Diversity): Top {len(selected)} selected")
+    print(f"  Source distribution: {dist}")
+    print(f"  ✅ Funnel complete — {len(selected)} articles ready for AI analysis")
+    print(f"  📊 Total trace: {len(trace)} articles documented")
 
-
-if __name__ == "__main__":
-    import sys, os
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from collectors.rss_collector import collect_articles
-
-    print("🔍 GNI Intelligence Funnel v2 — Test Run\n")
-    raw = collect_articles(max_per_source=20)
-    top = run_funnel(raw, top_n=10, max_per_source=3)
-
-    print("📊 Top Articles After Funnel (Bias-Free + Injection-Safe):")
-    for i, a in enumerate(top, 1):
-        consensus = a.get("source_consensus", 1)
-        injected = "🚨" if a.get("injection_threat") else "✅"
-        print(f"  {i:2}. {injected} [{a['significance_score']:3}] [src:{consensus}] {a['source']:12} {a['title'][:55]}")
+    return selected, trace
