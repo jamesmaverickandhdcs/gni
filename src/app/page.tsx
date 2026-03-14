@@ -1,6 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const GeoMap = dynamic(() => import('@/components/GeoMap'), { ssr: false })
 
 interface Report {
   id: string
@@ -10,6 +13,8 @@ interface Report {
   sentiment_score: number
   risk_level: string
   location_name: string
+  lat: number | null
+  lng: number | null
   tickers_affected: string[]
   market_impact: string
   llm_source: string
@@ -27,10 +32,10 @@ interface WatchlistItem {
 const riskColor = (risk: string) => {
   switch (risk?.toLowerCase()) {
     case 'critical': return 'bg-red-600 text-white'
-    case 'high': return 'bg-orange-500 text-white'
-    case 'medium': return 'bg-yellow-500 text-black'
-    case 'low': return 'bg-green-500 text-white'
-    default: return 'bg-gray-500 text-white'
+    case 'high':     return 'bg-orange-500 text-white'
+    case 'medium':   return 'bg-yellow-500 text-black'
+    case 'low':      return 'bg-green-500 text-white'
+    default:         return 'bg-gray-500 text-white'
   }
 }
 
@@ -38,7 +43,7 @@ const sentimentColor = (sentiment: string) => {
   switch (sentiment?.toLowerCase()) {
     case 'bearish': return 'text-red-500'
     case 'bullish': return 'text-green-500'
-    default: return 'text-gray-400'
+    default:        return 'text-gray-400'
   }
 }
 
@@ -46,7 +51,7 @@ const sentimentIcon = (sentiment: string) => {
   switch (sentiment?.toLowerCase()) {
     case 'bearish': return '▼'
     case 'bullish': return '▲'
-    default: return '●'
+    default:        return '◆'
   }
 }
 
@@ -109,7 +114,7 @@ export default function Home() {
 
         {!loading && !error && reports.length === 0 && (
           <div className="text-center py-20 text-gray-400">
-            <div className="text-4xl mb-4">📭</div>
+            <div className="text-4xl mb-4">📡</div>
             <p>No reports yet. Pipeline runs at 09:00 and 17:00 Myanmar time.</p>
           </div>
         )}
@@ -238,6 +243,12 @@ export default function Home() {
                 </div>
               </section>
             )}
+
+            {/* Geo Map */}
+            <section className="mt-8">
+              <GeoMap />
+            </section>
+
           </>
         )}
       </main>
