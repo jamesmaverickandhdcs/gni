@@ -27,7 +27,7 @@ function getScoreColor(score: number): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createArticleIcon(L: any, score: number, _rank: number) {
+function createArticleIcon(L: any, score: number) {
   const color = getScoreColor(score)
   return L.divIcon({
     className: '',
@@ -119,7 +119,7 @@ export default function MapView({ events }: { events: ArticleEvent[] }) {
           <Marker
             key={event.id}
             position={[event.lat, event.lng]}
-            icon={createArticleIcon(L, event.stage3_score, event.stage4_rank)}
+            icon={createArticleIcon(L, event.stage3_score)}
           >
             <Popup>
               <div style={{ fontFamily: 'Arial, sans-serif', padding: '4px' }}>
