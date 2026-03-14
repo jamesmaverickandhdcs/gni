@@ -45,6 +45,22 @@ KNOWN_LOCATIONS = {
     "sudan": (12.8628, 30.2176),
     "ethiopia": (9.1450, 40.4897),
     "somalia": (5.1521, 46.1996),
+      # Multi-region fallbacks
+    "middle east": (29.2985, 42.5510),
+    "middle east and europe": (35.0000, 38.0000),
+    "europe": (54.5260, 15.2551),
+    "asia": (34.0479, 100.6197),
+    "africa": (8.7832, 34.5085),
+    "global": (20.0000, 0.0000),
+    "southeast asia": (12.8797, 121.7740),
+    "eastern europe": (52.0000, 30.0000),
+    "persian gulf": (26.9000, 50.5500),
+    "south asia": (20.0000, 77.0000),
+    "middle east and north america": (35.0000, 38.0000),
+    "north america": (54.5260, -105.2551),
+    "latin america": (-8.7832, -55.4915),
+    "west africa": (12.3714, -1.5197),
+    "central asia": (46.0000, 65.0000),
 }
 
 # Layer 1: In-memory runtime cache
@@ -72,12 +88,25 @@ def geocode(location: str, retries: int = 2) -> dict | None:
     if key in _memory_cache:
         return _memory_cache[key]
 
-    # Layer 2: Known locations
+    # Layer 2: Known locations — check exact match first, then partial
+    for known, coords in KNOWN_LOCATIONS.items():
+        if known == key:  # exact match first
+            result = {"lat": coords[0], "lng": coords[1], "name": location}
+            _memory_cache[key] = result
+            return result
+
     for known, coords in KNOWN_LOCATIONS.items():
         if known in key or key in known:
             result = {"lat": coords[0], "lng": coords[1], "name": location}
             _memory_cache[key] = result
             return result
+
+    # Skip Nominatim for multi-word region names — too unreliable
+    if len(key.split()) > 2:
+        # Use center of known regions as fallback
+        result = {"lat": 29.0, "lng": 42.0, "name": location}
+        _memory_cache[key] = result
+        return result
 
     # Layer 3: Nominatim API
     for attempt in range(retries):
