@@ -89,7 +89,7 @@ def format_ai_thinking_message(report: dict, articles: list) -> str:
         source = art.get("source", "Unknown")
         title = art.get("title", "Untitled")
         score = art.get("stage3_score", 0)
-        url = art.get("url", "")
+        url = art.get("link") or art.get("url", "")
         # Truncate long titles
         if len(title) > 80:
             title = title[:77] + "..."

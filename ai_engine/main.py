@@ -15,13 +15,14 @@ from analysis.supabase_saver import (
     save_report,
     save_pipeline_run,
     save_pipeline_articles,
+    save_article_events,
     save_runtime_log,
 )
 from notifications.telegram_notifier import notify_report
 
 # ============================================================
 # GNI Main Pipeline — Day 6
-# Now saves full article trace for Explainable AI
+# Full orchestration with Explainable AI article trace
 # ============================================================
 
 GITHUB_ACTIONS = os.getenv("GITHUB_ACTIONS", "false").lower() == "true"
@@ -35,11 +36,14 @@ def run_pipeline():
     error_message = ""
     articles_collected = 0
     articles_after_funnel = 0
+    total_after_relevance = 0
+    total_after_dedup = 0
     reports_saved = 0
     report_id = None
     run_id = None
     trace = []
     report = None
+    top_articles = []
 
     print("=" * 60)
     print("🌐 GNI — Global Nexus Insights")
@@ -69,7 +73,6 @@ def run_pipeline():
         step_timings["funnel"] = round(time.time() - t0, 2)
         articles_after_funnel = len(top_articles)
 
-        # Count funnel stages
         total_after_relevance = len([a for a in trace if a.get("stage1_passed")])
         total_after_dedup = len([a for a in trace if a.get("stage2_passed")])
 
@@ -94,7 +97,7 @@ def run_pipeline():
         if report_id:
             reports_saved = 1
 
-        # ── Step 5: Save Pipeline Run ───────────────────────
+        # ── Step 5: Save Pipeline Run & Article Trace ───────
         print("\n📊 Step 5: Saving Pipeline Run & Article Trace...")
         total_seconds_so_far = round(
             (datetime.now(timezone.utc) - run_start).total_seconds(), 2
@@ -113,6 +116,7 @@ def run_pipeline():
 
         if run_id and trace:
             save_pipeline_articles(run_id, trace)
+            save_article_events(run_id, report_id, trace)
 
         # ── Step 6: Telegram Notification ──────────────────
         if report and report_id:

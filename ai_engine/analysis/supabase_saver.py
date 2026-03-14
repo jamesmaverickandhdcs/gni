@@ -136,7 +136,7 @@ def save_pipeline_articles(run_id: str, trace: list[dict]) -> bool:
                 "source": art.get("source", ""),
                 "bias": art.get("bias", ""),
                 "title": art.get("title", ""),
-                "url": art.get("url", ""),
+                "url": art.get("link") or art.get("url", ""),
                 "summary": (art.get("summary", "") or "")[:500],
                 "published_at": str(art.get("published", "")),
                 "stage1_passed": art.get("stage1_passed", False),
@@ -162,6 +162,81 @@ def save_pipeline_articles(run_id: str, trace: list[dict]) -> bool:
     except Exception as e:
         print(f"  ❌ Failed to save article trace: {e}")
         return False
+    
+def save_article_events(
+    run_id: str,
+    report_id: str | None,
+    articles: list[dict]
+) -> bool:
+    """Save top selected articles to article_events table for map pins."""
+    client = get_client()
+    if not client:
+        return False
+
+    try:
+        import sys, os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from geo.geocoder import geocode
+
+        records = []
+        for art in articles:
+            # Only save selected articles (top 5-10)
+            if not art.get("stage4_selected"):
+                continue
+
+            # Geocode article location from title/summary
+            location_name = _extract_location(art)
+            lat, lng = None, None
+            if location_name:
+                geo = geocode(location_name)
+                if geo:
+                    lat = geo["lat"]
+                    lng = geo["lng"]
+
+            records.append({
+                "run_id": run_id,
+                "report_id": report_id,
+                "source": art.get("source", ""),
+                "bias": art.get("bias", ""),
+                "title": art.get("title", ""),
+                "url": art.get("link") or art.get("url", ""),
+                "summary": (art.get("summary", "") or "")[:500],
+                "stage3_score": float(art.get("stage3_score", 0)),
+                "stage4_rank": art.get("stage4_rank"),
+                "location_name": location_name,
+                "lat": lat,
+                "lng": lng,
+            })
+
+        if records:
+            client.table("article_events").insert(records).execute()
+            print(f"  ✅ Article events saved: {len(records)} pins")
+
+        return True
+
+    except Exception as e:
+        print(f"  ❌ Failed to save article events: {e}")
+        return False
+
+
+def _extract_location(article: dict) -> str | None:
+    """Extract primary location from article title and summary."""
+    text = f"{article.get('title', '')} {article.get('summary', '')}".lower()
+
+    # Known locations in priority order
+    locations = [
+        "Israel", "Iran", "Ukraine", "Russia", "China", "Taiwan",
+        "Gaza", "Lebanon", "Syria", "Iraq", "Saudi Arabia", "Yemen",
+        "North Korea", "South Korea", "Japan", "India", "Pakistan",
+        "United States", "Washington", "Europe", "Middle East",
+        "Sudan", "Ethiopia", "Somalia", "Myanmar", "Afghanistan",
+    ]
+
+    for loc in locations:
+        if loc.lower() in text:
+            return loc
+
+    return None    
 
 
 def save_runtime_log(
