@@ -1,49 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
-import yahooFinance from 'yahoo-finance2'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const ticker = searchParams.get('ticker') || 'SPY'
   const range = searchParams.get('range') || '10y'
 
+  const intervalMap: Record<string, string> = {
+    '1m': '1d', '6m': '1wk', '1y': '1mo', '5y': '1mo', '10y': '1mo'
+  }
+
+  const rangeMap: Record<string, string> = {
+    '1m': '1mo', '6m': '6mo', '1y': '1y', '5y': '5y', '10y': '10y'
+  }
+
+  const interval = intervalMap[range] || '1mo'
+  const period = rangeMap[range] || '10y'
+
   try {
-    // Get current quote
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const quote = await yahooFinance.quote(ticker) as any
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${ticker}?interval=${interval}&range=${period}`
 
-    // Get historical data
-    const endDate = new Date()
-    const startDate = new Date()
-
-    switch (range) {
-      case '1m':  startDate.setMonth(startDate.getMonth() - 1); break
-      case '6m':  startDate.setMonth(startDate.getMonth() - 6); break
-      case '1y':  startDate.setFullYear(startDate.getFullYear() - 1); break
-      case '5y':  startDate.setFullYear(startDate.getFullYear() - 5); break
-      case '10y': startDate.setFullYear(startDate.getFullYear() - 10); break
-      default:    startDate.setFullYear(startDate.getFullYear() - 10)
-    }
-
-    const historical = await yahooFinance.historical(ticker, {
-      period1: startDate.toISOString().split('T')[0],
-      period2: endDate.toISOString().split('T')[0],
-      interval: range === '1m' ? '1d' : range === '6m' ? '1wk' : ('1mo' as const),
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      },
+      next: { revalidate: 3600 }
     })
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const chartData = (historical as any[]).map((item: any) => ({
-      date: item.date.toISOString().split('T')[0],
-      close: Number(item.close?.toFixed(2)),
-      volume: item.volume,
-    }))
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance returned ${response.status}`)
+    }
+
+    const data = await response.json()
+    const result = data?.chart?.result?.[0]
+
+    if (!result) throw new Error('No data returned')
+
+    const meta = result.meta
+    const timestamps = result.timestamp || []
+    const closes = result.indicators?.quote?.[0]?.close || []
+
+    const chartData = timestamps.map((ts: number, i: number) => ({
+      date: new Date(ts * 1000).toISOString().split('T')[0],
+      close: closes[i] ? Number(closes[i].toFixed(2)) : null,
+    })).filter((d: {date: string, close: number | null}) => d.close !== null)
 
     return NextResponse.json({
       ticker,
-      name: quote.longName || quote.shortName || ticker,
-      price: quote.regularMarketPrice,
-      change: quote.regularMarketChange?.toFixed(2),
-      changePercent: quote.regularMarketChangePercent?.toFixed(2),
-      currency: quote.currency,
+      name: meta.longName || meta.shortName || ticker,
+      price: meta.regularMarketPrice,
+      change: (meta.regularMarketPrice - meta.chartPreviousClose).toFixed(2),
+      changePercent: (((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100).toFixed(2),
+      currency: meta.currency || 'USD',
       chartData,
     })
 
