@@ -27,7 +27,7 @@ function getScoreColor(score: number): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createArticleIcon(L: any, score: number, rank: number) {
+function createArticleIcon(L: any, score: number, _rank: number) {
   const color = getScoreColor(score)
   return L.divIcon({
     className: '',
