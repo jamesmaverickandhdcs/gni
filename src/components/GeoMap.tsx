@@ -17,6 +17,15 @@ interface Report {
   market_impact: string
 }
 
+function getSentimentColor(sentiment: string): string {
+  switch (sentiment?.toLowerCase()) {
+    case 'bearish': return '#dc2626'
+    case 'bullish': return '#16a34a'
+    case 'neutral': return '#ca8a04'
+    default:        return '#6b7280'
+  }
+}
+
 function getRiskColor(risk: string): string {
   switch (risk?.toLowerCase()) {
     case 'critical': return '#dc2626'
@@ -37,19 +46,10 @@ function getRiskSymbol(risk: string): string {
   }
 }
 
-function getSentimentSymbol(sentiment: string): string {
-  switch (sentiment?.toLowerCase()) {
-    case 'bearish': return '▼'
-    case 'bullish': return '▲'
-    default:        return '◆'
-  }
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createCustomIcon(L: any, risk: string, sentiment: string) {
-  const color = getRiskColor(risk)
-  const symbol = getSentimentSymbol(sentiment)
-  
+function createCustomIcon(L: any, sentiment: string) {
+  const color = getSentimentColor(sentiment)
+
   return L.divIcon({
     className: '',
     html: `
@@ -62,12 +62,10 @@ function createCustomIcon(L: any, risk: string, sentiment: string) {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 18px;
-        font-weight: bold;
-        color: white;
+        font-size: 20px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.6);
         cursor: pointer;
-      ">${symbol}</div>
+      ">📰</div>
     `,
     iconSize: [44, 44],
     iconAnchor: [22, 22],
@@ -113,26 +111,28 @@ export default function GeoMap() {
 
   return (
     <div className="bg-gray-800 rounded-xl overflow-hidden">
+
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-700 flex items-center justify-between">
         <div>
           <div className="text-xs text-gray-500 uppercase tracking-wider">🌍 Geopolitical Event Map</div>
           <div className="text-xs text-gray-600 mt-0.5">{reports.length} event{reports.length !== 1 ? 's' : ''} plotted</div>
         </div>
-        {/* Legend */}
-        <div className="flex gap-3 text-xs">
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600 inline-block"></span><span className="text-gray-400">Critical</span></span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-orange-500 inline-block"></span><span className="text-gray-400">High</span></span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-yellow-500 inline-block"></span><span className="text-gray-400">Medium</span></span>
-          <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span><span className="text-gray-400">Low</span></span>
-        </div>
+        <div className="text-xs text-gray-600">Color = Sentiment</div>
       </div>
 
-      {/* Symbol legend */}
-      <div className="px-4 py-2 border-b border-gray-700 flex gap-4 text-xs text-gray-500">
-        <span>▼ Bearish market</span>
-        <span>▲ Bullish market</span>
-        <span>◆ Neutral</span>
+      {/* Legend */}
+      <div className="px-4 py-2 border-b border-gray-700 flex gap-6 text-xs text-gray-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-red-600 inline-block"></span> Bearish
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-green-600 inline-block"></span> Bullish
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full bg-yellow-600 inline-block"></span> Neutral
+        </span>
+        <span className="text-gray-600">📰 = news event</span>
       </div>
 
       <style>{`
@@ -168,7 +168,7 @@ export default function GeoMap() {
           <Marker
             key={report.id}
             position={[report.lat!, report.lng!]}
-            icon={createCustomIcon(L, report.risk_level, report.sentiment)}
+            icon={createCustomIcon(L, report.sentiment)}
           >
             <Popup>
               <div style={{ minWidth: '220px', fontFamily: 'Arial, sans-serif', padding: '4px' }}>
@@ -181,8 +181,10 @@ export default function GeoMap() {
                 <div style={{ fontSize: '12px', marginBottom: '4px', color: getRiskColor(report.risk_level) }}>
                   {getRiskSymbol(report.risk_level)} Risk: <strong>{report.risk_level}</strong>
                 </div>
-                <div style={{ fontSize: '12px', marginBottom: '4px', color: '#9ca3af' }}>
-                  {getSentimentSymbol(report.sentiment)} Sentiment: <strong style={{color: report.sentiment === 'Bearish' ? '#ef4444' : report.sentiment === 'Bullish' ? '#22c55e' : '#eab308'}}>{report.sentiment}</strong>
+                <div style={{ fontSize: '12px', marginBottom: '4px' }}>
+                  Sentiment: <strong style={{ color: getSentimentColor(report.sentiment) }}>
+                    {report.sentiment}
+                  </strong>
                 </div>
                 {report.market_impact && (
                   <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '8px', borderTop: '1px solid #374151', paddingTop: '6px' }}>
