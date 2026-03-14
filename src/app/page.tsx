@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 
 const GeoMap = dynamic(() => import('@/components/GeoMap'), { ssr: false })
+const StockPanel = dynamic(() => import('@/components/StockPanel'), { ssr: false })
 
 interface Report {
   id: string
@@ -247,6 +248,11 @@ export default function Home() {
             {/* Geo Map */}
             <section className="mt-8">
               <GeoMap />
+            </section>
+
+            {/* Stock Panel */}
+            <section className="mt-8">
+              <StockPanel />
             </section>
 
           </>
