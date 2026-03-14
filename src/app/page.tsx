@@ -1,10 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import dynamic from 'next/dynamic'
-
-const GeoMap = dynamic(() => import('@/components/GeoMap'), { ssr: false })
-const StockPanel = dynamic(() => import('@/components/StockPanel'), { ssr: false })
 
 interface Report {
   id: string
@@ -22,12 +18,15 @@ interface Report {
   created_at: string
 }
 
-interface WatchlistItem {
+interface PipelineArticle {
   id: string
-  ticker: string
-  name: string
-  category: string
-  active: boolean
+  source: string
+  title: string
+  url: string
+  summary: string
+  stage3_score: number
+  stage4_rank: number
+  stage4_selected: boolean
 }
 
 const riskColor = (risk: string) => {
@@ -58,9 +57,10 @@ const sentimentIcon = (sentiment: string) => {
 
 export default function Home() {
   const [reports, setReports] = useState<Report[]>([])
-  const [watchlist, setWatchlist] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [latestArticles, setLatestArticles] = useState<PipelineArticle[]>([])
+  const [showAIThinking, setShowAIThinking] = useState(false)
 
   useEffect(() => {
     fetch('/api/reports')
@@ -72,9 +72,20 @@ export default function Home() {
       .catch(() => setError('Failed to load reports'))
       .finally(() => setLoading(false))
 
-    fetch('/api/watchlist')
+    // Fetch latest pipeline run articles
+    fetch('/api/pipeline-runs')
       .then(r => r.json())
-      .then(data => setWatchlist(data.watchlist || []))
+      .then(data => {
+        const runs = data.runs || []
+        if (runs.length > 0) {
+          fetch(`/api/pipeline-articles?run_id=${runs[0].id}`)
+            .then(r => r.json())
+            .then(d => {
+              const selected = (d.articles || []).filter((a: PipelineArticle) => a.stage4_selected === true)
+              setLatestArticles(selected)
+            })
+        }
+      })
       .catch(() => {})
   }, [])
 
@@ -85,19 +96,36 @@ export default function Home() {
 
       {/* Header */}
       <header className="border-b border-gray-800 bg-gray-900">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-white">🌐 Global Nexus Insights</h1>
-            <p className="text-sm text-gray-400">Macro-Economic & Geopolitical Intelligence</p>
-          </div>
-          <div className="text-right text-sm text-gray-400 flex items-center gap-4">
-            <a href="/transparency" className="text-blue-400 hover:text-blue-300 text-sm">
-              🔍 Transparency
-            </a>
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
             <div>
+              <h1 className="text-2xl font-bold text-white">🌐 Global Nexus Insights</h1>
+              <p className="text-sm text-gray-400">Macro-Economic & Geopolitical Intelligence</p>
+            </div>
+            <div className="text-right text-sm text-gray-400">
               <div>Pipeline: <span className="text-green-400">● Active</span></div>
               <div>Reports: <span className="text-white font-bold">{reports.length}</span></div>
             </div>
+          </div>
+
+          {/* 4 Navigation Buttons */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <a href="/map" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-blue-700 border border-gray-700 hover:border-blue-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors">
+              <span>🌍</span>
+              <span>World Map</span>
+            </a>
+            <a href="/stocks" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-green-700 border border-gray-700 hover:border-green-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors">
+              <span>📈</span>
+              <span>Stock Chart</span>
+            </a>
+            <a href="/transparency" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-purple-700 border border-gray-700 hover:border-purple-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors">
+              <span>🔍</span>
+              <span>Transparency</span>
+            </a>
+            <a href="/history" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-orange-700 border border-gray-700 hover:border-orange-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors">
+              <span>📅</span>
+              <span>History</span>
+            </a>
           </div>
         </div>
       </header>
@@ -127,10 +155,14 @@ export default function Home() {
 
         {!loading && reports.length > 0 && (
           <>
-            {/* Latest Report Hero */}
+            {/* Latest Intelligence Report */}
             <section className="mb-8">
-              <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">Latest Intelligence Report</div>
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                Latest Intelligence Report
+              </div>
               <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+
+                {/* Title + Risk */}
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <h2 className="text-xl font-bold text-white leading-tight">{latest.title}</h2>
                   <span className={`text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${riskColor(latest.risk_level)}`}>
@@ -140,6 +172,7 @@ export default function Home() {
 
                 <p className="text-gray-300 text-sm leading-relaxed mb-4">{latest.summary}</p>
 
+                {/* Stats grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                   <div className="bg-gray-800 rounded-lg p-3">
                     <div className="text-xs text-gray-500 mb-1">Sentiment</div>
@@ -180,14 +213,97 @@ export default function Home() {
                 )}
 
                 {/* Market Impact */}
-                <div className="bg-gray-800 rounded-lg p-4">
+                <div className="bg-gray-800 rounded-lg p-4 mb-4">
                   <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Market Impact Analysis</div>
                   <p className="text-gray-300 text-sm leading-relaxed">
                     {latest.market_impact || 'Analysis will appear in next pipeline run.'}
                   </p>
                 </div>
+
+                {/* Disclaimer */}
+                <div className="bg-yellow-900 border border-yellow-700 rounded-lg p-3">
+                  <p className="text-yellow-200 text-xs">
+                    ⚠️ <strong>Disclaimer:</strong> GNI reports are for informational purposes only and do not constitute financial advice. Always conduct your own research before making investment decisions.
+                  </p>
+                </div>
               </div>
             </section>
+
+            {/* AI Thinking Transparency */}
+            {latestArticles.length > 0 && (
+              <section className="mb-8">
+                <div className="bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
+                  <button
+                    onClick={() => setShowAIThinking(prev => !prev)}
+                    className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-lg">🧠</span>
+                      <div className="text-left">
+                        <div className="text-sm font-bold text-white">AI Thinking Transparency</div>
+                        <div className="text-xs text-gray-400">
+                          How {latestArticles.length} articles were consolidated into 1 report
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-gray-400 text-sm">{showAIThinking ? '▲ Hide' : '▼ Show'}</span>
+                  </button>
+
+                  {showAIThinking && (
+                    <div className="px-6 pb-6 border-t border-gray-700">
+                      {/* Funnel steps */}
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 my-4">
+                        {[
+                          { label: 'Collected', value: '92', color: 'bg-gray-700' },
+                          { label: 'Relevant', value: '74', color: 'bg-blue-900' },
+                          { label: 'Deduped', value: '74', color: 'bg-indigo-900' },
+                          { label: 'Scored', value: '74', color: 'bg-purple-900' },
+                          { label: 'Selected', value: String(latestArticles.length), color: 'bg-green-900' },
+                        ].map((step, i) => (
+                          <div key={i} className={`${step.color} rounded-lg p-2 text-center`}>
+                            <div className="text-xl font-bold text-white">{step.value}</div>
+                            <div className="text-xs text-gray-400">{step.label}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Selected articles */}
+                      <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
+                        Top {latestArticles.length} Articles Fed to AI
+                      </div>
+                      <div className="space-y-2">
+                        {latestArticles.map((art, i) => (
+                          <div key={art.id} className="bg-gray-800 rounded-lg p-3 flex items-start gap-3">
+                            <span className="text-xs font-bold text-blue-400 w-6 shrink-0">#{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-xs text-gray-500 font-mono">{art.source}</span>
+                                <span className="text-xs text-yellow-400">Score: {art.stage3_score}</span>
+                              </div>
+                              {art.url ? (
+                                <a
+                                  href={art.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-sm text-blue-300 hover:text-blue-200 leading-tight"
+                                >
+                                  {art.title}
+                                </a>
+                              ) : (
+                                <div className="text-sm text-white leading-tight">{art.title}</div>
+                              )}
+                              {art.summary && (
+                                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{art.summary}</p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Previous Reports */}
             {reports.length > 1 && (
@@ -226,40 +342,6 @@ export default function Home() {
                 </div>
               </section>
             )}
-
-            {/* Watchlist */}
-            {watchlist.length > 0 && (
-              <section className="mt-8">
-                <div className="text-xs text-gray-500 uppercase tracking-wider mb-3">
-                  Market Watchlist — {watchlist.length} Instruments
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-                  {watchlist.map(item => (
-                    <div key={item.id} className="bg-gray-900 border border-gray-800 rounded-lg p-3 hover:border-gray-600 transition-colors">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-mono font-bold text-blue-400 text-sm">{item.ticker}</span>
-                        <span className={`text-xs px-1.5 py-0.5 rounded ${item.active ? 'bg-green-900 text-green-400' : 'bg-gray-800 text-gray-500'}`}>
-                          {item.active ? 'Active' : 'Off'}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-300 truncate">{item.name}</div>
-                      <div className="text-xs text-gray-500 mt-1">{item.category}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Geo Map */}
-            <section className="mt-8">
-              <GeoMap />
-            </section>
-
-            {/* Stock Panel */}
-            <section className="mt-8">
-              <StockPanel />
-            </section>
-
           </>
         )}
       </main>
