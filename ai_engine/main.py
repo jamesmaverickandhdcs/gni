@@ -115,9 +115,8 @@ def run_pipeline():
             save_pipeline_articles(run_id, trace)
 
         # ── Step 6: Telegram Notification ──────────────────
-        print("\n📱 Step 6: Sending Telegram Notification...")
         if report and report_id:
-            notify_report(report)
+            notify_report(report, top_articles)
 
     except Exception as e:
         status = "failed"
