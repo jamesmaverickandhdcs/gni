@@ -19,6 +19,14 @@ interface ArticleEvent {
   created_at: string
 }
 
+interface LocationGroup {
+  lat: number
+  lng: number
+  location_name: string
+  articles: ArticleEvent[]
+  maxScore: number
+}
+
 function getScoreColor(score: number): string {
   if (score >= 15) return '#dc2626'
   if (score >= 10) return '#ea580c'
@@ -27,30 +35,34 @@ function getScoreColor(score: number): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function createArticleIcon(L: any, score: number) {
-  const color = getScoreColor(score)
+function createLocationIcon(L: any, count: number, maxScore: number) {
+  const color = getScoreColor(maxScore)
+  const size = count > 1 ? 48 : 40
   return L.divIcon({
     className: '',
     html: `
       <div style="
-        width: 40px;
-        height: 40px;
+        width: ${size}px;
+        height: ${size}px;
         background: ${color};
         border: 3px solid white;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 14px;
+        font-size: ${count > 1 ? '13px' : '14px'};
         font-weight: bold;
         color: white;
         box-shadow: 0 2px 8px rgba(0,0,0,0.6);
         cursor: pointer;
-      ">📰</div>
+        position: relative;
+      ">
+        ${count > 1 ? count + ' 📰' : '📰'}
+      </div>
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-    popupAnchor: [0, -25],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -(size / 2) - 5],
   })
 }
 
@@ -77,7 +89,27 @@ export default function MapView({ events }: { events: ArticleEvent[] }) {
   const { RL, L } = MapComponents
   const { MapContainer, TileLayer, Marker, Popup } = RL
 
-  const validEvents = events.filter(e => e.lat !== null && e.lng !== null)
+  // Group events by location (lat+lng key)
+  const locationMap: Record<string, LocationGroup> = {}
+  events.forEach(event => {
+    if (event.lat === null || event.lng === null) return
+    const key = `${event.lat.toFixed(4)}_${event.lng.toFixed(4)}`
+    if (locationMap[key] === undefined) {
+      locationMap[key] = {
+        lat: event.lat,
+        lng: event.lng,
+        location_name: event.location_name,
+        articles: [],
+        maxScore: 0,
+      }
+    }
+    locationMap[key].articles.push(event)
+    if (event.stage3_score > locationMap[key].maxScore) {
+      locationMap[key].maxScore = event.stage3_score
+    }
+  })
+
+  const locationGroups = Object.values(locationMap)
 
   return (
     <>
@@ -91,17 +123,11 @@ export default function MapView({ events }: { events: ArticleEvent[] }) {
           border: 1px solid #374151;
           border-radius: 8px;
           color: #f9fafb;
-          width: 300px;
-          max-height: none !important;
-          overflow: visible !important;
+          width: 320px;
         }
         .leaflet-popup-tip { background: #111827; }
         .leaflet-popup-close-button { color: #9ca3af !important; }
-        .leaflet-popup-content { 
-          margin: 8px 12px; 
-          overflow: visible !important;
-          max-height: none !important;
-        }
+        .leaflet-popup-content { margin: 10px 12px; }
       `}</style>
 
       <MapContainer
@@ -115,67 +141,84 @@ export default function MapView({ events }: { events: ArticleEvent[] }) {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
-        {validEvents.map(event => (
+        {locationGroups.map((group, idx) => (
           <Marker
-            key={event.id}
-            position={[event.lat, event.lng]}
-            icon={createArticleIcon(L, event.stage3_score)}
+            key={idx}
+            position={[group.lat, group.lng]}
+            icon={createLocationIcon(L, group.articles.length, group.maxScore)}
           >
             <Popup>
-              <div style={{ fontFamily: 'Arial, sans-serif', padding: '4px' }}>
-                {/* Rank + Source */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: 'bold' }}>
-                    #{event.stage4_rank} — {event.source}
-                  </span>
-                  <span style={{ fontSize: '11px', color: '#6b7280' }}>
-                    Score: {event.stage3_score}
-                  </span>
+              <div style={{ fontFamily: 'Arial, sans-serif' }}>
+
+                {/* Location header */}
+                <div style={{
+                  fontWeight: 'bold', fontSize: '13px', color: '#60a5fa',
+                  marginBottom: '8px', paddingBottom: '6px',
+                  borderBottom: '1px solid #374151'
+                }}>
+                  📍 {group.location_name} — {group.articles.length} article{group.articles.length !== 1 ? 's' : ''}
                 </div>
 
-                {/* Title */}
-                <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#f9fafb', marginBottom: '6px', lineHeight: '1.4' }}>
-                  {event.title}
+                {/* Article list */}
+                <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
+                  {group.articles.map((article, i) => (
+                    <div key={article.id} style={{
+                      marginBottom: '10px',
+                      paddingBottom: '10px',
+                      borderBottom: i < group.articles.length - 1 ? '1px solid #1f2937' : 'none'
+                    }}>
+                      {/* Source + Score */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '10px', color: '#6b7280', fontFamily: 'monospace' }}>
+                          {article.source}
+                        </span>
+                        <span style={{ fontSize: '10px', color: '#ca8a04' }}>
+                          Score: {article.stage3_score}
+                        </span>
+                      </div>
+
+                      {/* Title */}
+                      <div style={{
+                        fontSize: '12px', color: '#f9fafb', fontWeight: 'bold',
+                        lineHeight: '1.4', marginBottom: '4px'
+                      }}>
+                        {article.title}
+                      </div>
+
+                      {/* Summary */}
+                      {article.summary && (
+                        <div style={{ fontSize: '11px', color: '#6b7280', lineHeight: '1.4', marginBottom: '6px' }}>
+                          {article.summary.length > 80 ? article.summary.substring(0, 80) + '...' : article.summary}
+                        </div>
+                      )}
+
+                      {/* Read button */}
+                      {article.url && (
+                        <a
+                          href={article.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: 'inline-block',
+                            backgroundColor: '#1d4ed8',
+                            color: 'white',
+                            padding: '4px 10px',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: 'bold',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          Read Article →
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
-
-                {/* Location */}
-                <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '6px' }}>
-                  📍 {event.location_name}
-                </div>
-
-                {/* Summary */}
-                {event.summary && (
-                  <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', lineHeight: '1.5' }}>
-                    {event.summary.length > 100 ? event.summary.substring(0, 100) + '...' : event.summary}
-                  </div>
-                )}
-
-                {/* Source link */}
-                {event.url && (
-                  <a
-                    href={event.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: 'block',
-                      backgroundColor: '#1d4ed8',
-                      color: 'white',
-                      textAlign: 'center',
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      textDecoration: 'none',
-                      marginBottom: '4px'
-                    }}
-                  >
-                    Read Full Article →
-                  </a>
-                )}
 
                 {/* Date */}
-                <div style={{ fontSize: '10px', color: '#4b5563', textAlign: 'center' }}>
-                  {new Date(event.created_at).toLocaleDateString('en-US', {
+                <div style={{ fontSize: '10px', color: '#4b5563', textAlign: 'center', marginTop: '6px' }}>
+                  {new Date(group.articles[0].created_at).toLocaleDateString('en-US', {
                     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                   })}
                 </div>
