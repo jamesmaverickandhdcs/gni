@@ -5,12 +5,21 @@ export async function GET(request: NextRequest) {
   const ticker = searchParams.get('ticker') || 'SPY'
   const range = searchParams.get('range') || '10y'
 
+  // Updated ranges: 3d 7d 1m 1y 10y
   const intervalMap: Record<string, string> = {
-    '1m': '1d', '6m': '1wk', '1y': '1mo', '5y': '1mo', '10y': '1mo'
+    '3d':  '5m',
+    '7d':  '1h',
+    '1m':  '1d',
+    '1y':  '1wk',
+    '10y': '1mo',
   }
 
   const rangeMap: Record<string, string> = {
-    '1m': '1mo', '6m': '6mo', '1y': '1y', '5y': '5y', '10y': '10y'
+    '3d':  '5d',
+    '7d':  '7d',
+    '1m':  '1mo',
+    '1y':  '1y',
+    '10y': '10y',
   }
 
   const interval = intervalMap[range] || '1mo'
@@ -24,7 +33,7 @@ export async function GET(request: NextRequest) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
       },
-      next: { revalidate: 3600 }
+      next: { revalidate: range === '3d' || range === '7d' ? 300 : 3600 }
     })
 
     if (!response.ok) {
@@ -43,7 +52,7 @@ export async function GET(request: NextRequest) {
     const chartData = timestamps.map((ts: number, i: number) => ({
       date: new Date(ts * 1000).toISOString().split('T')[0],
       close: closes[i] ? Number(closes[i].toFixed(2)) : null,
-    })).filter((d: {date: string, close: number | null}) => d.close !== null)
+    })).filter((d: { date: string, close: number | null }) => d.close !== null)
 
     return NextResponse.json({
       ticker,
