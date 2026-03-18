@@ -68,7 +68,7 @@ def format_consolidated_message(report: dict) -> str:
 📈 <b>Tickers:</b> {ticker_str}
 🕐 {timestamp}
 ━━━━━━━━━━━━━━━━━━━━
-🔍 <a href="https://gni-dusky.vercel.app">View Dashboard</a> | <a href="https://gni-dusky.vercel.app/transparency">Transparency</a>
+🔍 <a href="https://gni-dusky.vercel.app">Dashboard</a> | <a href="https://gni-dusky.vercel.app/stocks">Stock Chart</a> | <a href="https://gni-dusky.vercel.app/transparency">Transparency</a>
 ━━━━━━━━━━━━━━━━━━━━
 <i>⚠️ DISCLAIMER: GNI reports are for informational purposes only and do not constitute financial advice. Always conduct your own research before making investment decisions.</i>"""
 
@@ -115,7 +115,7 @@ def format_ai_thinking_message(report: dict, articles: list) -> str:
 <b>How AI consolidated {total} articles → 1 report</b>
 
 <b>Step 1: Collection</b>
-93 articles collected from 5 sources
+{len(articles)} articles collected from 5 sources
 
 <b>Step 2: Intelligence Funnel</b>
 Stage 1 (Relevance): Removed non-geopolitical content
@@ -143,7 +143,7 @@ affected markets, primary location
 
 🕐 {timestamp}
 ━━━━━━━━━━━━━━━━━━━━
-🔍 <a href="https://gni-dusky.vercel.app/transparency">Full Transparency Engine</a>
+🔍 <a href="https://gni-dusky.vercel.app/transparency">Transparency Engine</a> | <a href="https://gni-dusky.vercel.app/stocks">Stock Chart</a>
 <i>⚠️ For informational purposes only. Not financial advice.</i>"""
 
     return message
