@@ -100,7 +100,7 @@ export default function Home() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-bold text-white">🌐 Global Nexus Insights</h1>
-              <p className="text-sm text-gray-400">Macro-Economic & Geopolitical Intelligence</p>
+              <p className="text-sm text-gray-400">Technology + Geopolitics + Financial Impact</p>
             </div>
             <div className="text-right text-sm text-gray-400">
               <div>Pipeline: <span className="text-green-400">● Active</span></div>
