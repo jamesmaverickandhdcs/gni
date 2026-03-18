@@ -1,26 +1,21 @@
 name: GNI Intelligence Pipeline
-
 on:
   schedule:
     - cron: '0 2 * * *'
     - cron: '0 10 * * *'
   workflow_dispatch:
-
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
-
       - name: Install dependencies
         run: |
           pip install --upgrade pip
@@ -31,7 +26,6 @@ jobs:
             python-dotenv \
             groq \
             requests
-
       - name: Run GNI Pipeline
         run: python ai_engine/main.py
         env:
@@ -41,3 +35,30 @@ jobs:
           GITHUB_ACTIONS: "true"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+
+  verify-outcomes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Run once daily at 11:00 UTC (after market close)
+    if: github.event.schedule == '0 10 * * *' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            supabase \
+            python-dotenv \
+            requests
+      - name: Run Outcome Verifier (GPVS)
+        run: python ai_engine/analysis/outcome_verifier.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GITHUB_ACTIONS: "true"
