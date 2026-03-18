@@ -18,6 +18,14 @@ interface Report {
   created_at: string
 }
 
+interface PredictionSummary {
+  total: number
+  avg_score: number
+  accuracy_3d: number
+  accuracy_7d: number
+  pending_review: number
+}
+
 interface PipelineArticle {
   id: string
   source: string
@@ -55,12 +63,62 @@ const sentimentIcon = (sentiment: string) => {
   }
 }
 
+function PredictionScorecard({ summary }: { summary: PredictionSummary | null }) {
+  if (summary === null || summary.total === 0) return null
+  return (
+    <section className="mb-8">
+      <div className="bg-gray-900 border border-gray-700 rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <span className="text-lg">🎯</span>
+          <div>
+            <div className="text-sm font-bold text-white">GPVS Prediction Scorecard</div>
+            <div className="text-xs text-gray-400">GNI Prediction Validation Standard — {summary.total} reports verified</div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className={`text-2xl font-bold ${summary.avg_score >= 70 ? 'text-green-400' : summary.avg_score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {summary.avg_score}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">GPVS Score</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className={`text-2xl font-bold ${summary.accuracy_3d >= 70 ? 'text-green-400' : summary.accuracy_3d >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {summary.accuracy_3d}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">3-Day Accuracy</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className={`text-2xl font-bold ${summary.accuracy_7d >= 70 ? 'text-green-400' : summary.accuracy_7d >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+              {summary.accuracy_7d}%
+            </div>
+            <div className="text-xs text-gray-500 mt-1">7-Day Accuracy</div>
+          </div>
+          <div className="bg-gray-800 rounded-lg p-3 text-center">
+            <div className={`text-2xl font-bold ${summary.pending_review === 0 ? 'text-green-400' : 'text-yellow-400'}`}>
+              {summary.pending_review}
+            </div>
+            <div className="text-xs text-gray-500 mt-1">Pending Review</div>
+          </div>
+        </div>
+        <div className="mt-3 text-xs text-gray-600 text-center">
+          Powered by GPVS v1.0 — GNI Prediction Validation Standard | SPY directional accuracy vs actual market movements
+        </div>
+        <div className="mt-2 text-xs text-yellow-600 text-center">
+          ⚠️ Past accuracy does not guarantee future performance. Not financial advice.
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export default function Home() {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [latestArticles, setLatestArticles] = useState<PipelineArticle[]>([])
   const [showAIThinking, setShowAIThinking] = useState(false)
+  const [predictionSummary, setPredictionSummary] = useState<PredictionSummary | null>(null)
 
   useEffect(() => {
     fetch('/api/reports')
@@ -73,6 +131,11 @@ export default function Home() {
       .finally(() => setLoading(false))
 
     // Fetch latest pipeline run articles
+    fetch('/api/prediction-outcomes')
+      .then(r => r.json())
+      .then(data => setPredictionSummary(data.summary || null))
+      .catch(() => {})
+
     fetch('/api/pipeline-runs')
       .then(r => r.json())
       .then(data => {
@@ -304,6 +367,9 @@ export default function Home() {
                 </div>
               </section>
             )}
+
+            {/* Prediction Scorecard */}
+            <PredictionScorecard summary={predictionSummary} />
 
             {/* Previous Reports */}
             {reports.length > 1 && (
