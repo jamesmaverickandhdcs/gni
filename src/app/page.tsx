@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+
 
 interface Report {
   id: string
@@ -122,25 +122,23 @@ export default function Home() {
 
   // Supabase Realtime — auto-refresh when new report arrives
   useEffect(() => {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    const channel = supabase
-      .channel('reports-changes')
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'reports' },
-        () => {
-          fetch('/api/reports')
-            .then(r => r.json())
-            .then(data => {
-              if (data.reports) setReports(data.reports)
+    // Poll every 5 minutes for new reports instead of websocket
+    const interval = setInterval(() => {
+      fetch('/api/reports')
+        .then(r => r.json())
+        .then(data => {
+          if (data.reports && data.reports.length > 0) {
+            setReports(prev => {
+              if (prev[0]?.id !== data.reports[0]?.id) {
+                return data.reports
+              }
+              return prev
             })
-            .catch(() => {})
-        }
-      )
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
+          }
+        })
+        .catch(() => {})
+    }, 300000) // 5 minutes
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
