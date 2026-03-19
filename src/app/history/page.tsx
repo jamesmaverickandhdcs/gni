@@ -39,6 +39,16 @@ interface Article {
   stage4_selected: boolean
 }
 
+interface PredictionOutcome {
+  accuracy_score: number
+  spy_change_3d: number
+  spy_change_7d: number
+  direction_correct_3d: boolean
+  direction_correct_7d: boolean
+  human_review_needed: boolean
+  measured_at: string
+}
+
 function riskColor(risk: string) {
   switch (risk?.toLowerCase()) {
     case 'critical': return 'bg-red-600 text-white'
@@ -61,6 +71,7 @@ function RunCard({ run, reports }: { run: PipelineRun, reports: Report[] }) {
   const [expanded, setExpanded] = useState(false)
   const [articles, setArticles] = useState<Article[]>([])
   const [loadingArticles, setLoadingArticles] = useState(false)
+  const [outcome, setOutcome] = useState<PredictionOutcome | null>(null)
 
   const report = reports.find(r => r.id === run.report_id)
 
@@ -75,6 +86,17 @@ function RunCard({ run, reports }: { run: PipelineRun, reports: Report[] }) {
         })
         .catch(() => {})
         .finally(() => setLoadingArticles(false))
+
+      // Fetch GPVS outcome for this report
+      if (run.report_id) {
+        fetch('/api/prediction-outcomes')
+          .then(r => r.json())
+          .then(data => {
+            const match = (data.outcomes || []).find((o: PredictionOutcome & {report_id: string}) => o.report_id === run.report_id)
+            if (match) setOutcome(match)
+          })
+          .catch(() => {})
+      }
     }
     setExpanded(expanded === false)
   }
@@ -125,6 +147,37 @@ function RunCard({ run, reports }: { run: PipelineRun, reports: Report[] }) {
 
       {expanded && (
         <div className="border-t border-gray-800 px-6 py-4 space-y-4">
+
+          {outcome && (
+            <div className="bg-gray-900 border border-gray-700 rounded-lg p-4">
+              <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+                🎯 GPVS Outcome — Prediction vs Reality
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
+                  <div className={`text-xl font-bold ${outcome.accuracy_score >= 0.75 ? 'text-green-400' : outcome.accuracy_score >= 0.5 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {Math.round(outcome.accuracy_score * 100)}%
+                  </div>
+                  <div className="text-xs text-gray-500">GPVS Score</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-xl font-bold ${outcome.direction_correct_3d ? 'text-green-400' : 'text-red-400'}`}>
+                    {outcome.spy_change_3d > 0 ? '+' : ''}{outcome.spy_change_3d?.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-gray-500">SPY 3-Day</div>
+                </div>
+                <div className="text-center">
+                  <div className={`text-xl font-bold ${outcome.direction_correct_7d ? 'text-green-400' : 'text-red-400'}`}>
+                    {outcome.spy_change_7d > 0 ? '+' : ''}{outcome.spy_change_7d?.toFixed(1)}%
+                  </div>
+                  <div className="text-xs text-gray-500">SPY 7-Day</div>
+                </div>
+              </div>
+              {outcome.human_review_needed && (
+                <div className="mt-2 text-xs text-yellow-400">⚠️ Human review recommended</div>
+              )}
+            </div>
+          )}
 
           {report && (
             <div className="bg-gray-800 rounded-lg p-4">
