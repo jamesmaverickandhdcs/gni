@@ -192,6 +192,39 @@ export default function Home() {
             </div>
           </div>
 
+          {/* Three Pillar Risk Indicators */}
+          {latest && (
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-sm">🔬</span>
+                <div>
+                  <div className="text-xs text-gray-500">Technology</div>
+                  <div className={`text-xs font-bold ${latest.risk_level?.toLowerCase() === 'critical' ? 'text-red-400' : latest.risk_level?.toLowerCase() === 'high' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                    {latest.risk_level?.toUpperCase() || 'MONITORING'}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-sm">🌍</span>
+                <div>
+                  <div className="text-xs text-gray-500">Geopolitics</div>
+                  <div className={`text-xs font-bold ${latest.risk_level?.toLowerCase() === 'critical' ? 'text-red-400' : latest.risk_level?.toLowerCase() === 'high' ? 'text-orange-400' : 'text-yellow-400'}`}>
+                    {latest.risk_level?.toUpperCase() || 'MONITORING'}
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 flex items-center gap-2">
+                <span className="text-sm">📈</span>
+                <div>
+                  <div className="text-xs text-gray-500">Financial</div>
+                  <div className={`text-xs font-bold ${latest.sentiment?.toLowerCase() === 'bearish' ? 'text-red-400' : latest.sentiment?.toLowerCase() === 'bullish' ? 'text-green-400' : 'text-gray-400'}`}>
+                    {latest.sentiment?.toUpperCase() || 'NEUTRAL'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* 4 Navigation Buttons */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <a href="/map" className="flex items-center justify-center gap-2 bg-gray-800 hover:bg-blue-700 border border-gray-700 hover:border-blue-500 rounded-lg px-4 py-3 text-sm font-medium transition-colors">
